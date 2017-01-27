@@ -2,11 +2,11 @@ package rmi;
 
 import java.io.*;
 import java.lang.reflect.Method;
+import java.lang.reflect.InvocationTargetException;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.stream.Stream;
 
 /**
  * RMI skeleton
@@ -189,20 +189,21 @@ public class Skeleton<T> {
                 @Override
                 public void run() {
                     Executor executor = Executors.newCachedThreadPool();
-                    Throwable reason = null;
 
                     while (isRunning) try {
                         Socket socket = serverSocket.accept();
-                        ObjectInputStream is = new ObjectInputStream(socket.getInputStream());
-                        ObjectOutputStream os = new ObjectOutputStream(socket.getOutputStream());
-                        executor.execute(new RequestHandler(is, os, Skeleton.this));
+                        executor.execute(new RequestHandler(socket, Skeleton.this));
                     } catch (IOException e) {
+                        if (!isRunning) { // we catch the error because stop() is called
+                            stopped(null);
+                            break;
+                        }
                         if (!listen_error(e)) {
-                            reason = e;
+                            stop();
+                            stopped(e);
                             break;
                         }
                     }
-                    stopped(reason);
                 }
             }).start();
         } catch (IOException e) {
@@ -227,42 +228,84 @@ public class Skeleton<T> {
         try {
             serverSocket.close();
             isRunning = false;
-            stopped(null);
         } catch (IOException e) {
             throw new RuntimeException("close server socket error");
         }
     }
 
-    private class RequestHandler implements Runnable {
+    private static class Request implements Serializable {
+        String methodName;
+        ArrayList<Object> arguments;
+    }
 
-        private final ObjectInputStream objectInputStream;
-        private final ObjectOutputStream objectOutputStream;
-        private final Skeleton<T> skeleton;
+    private static class Response implements Serializable {
+        enum Status {
+            NORMAL, EXCEPTION, ERROR
+        }
 
-        RequestHandler(ObjectInputStream is, ObjectOutputStream os, Skeleton<T> skeleton) {
-            this.objectInputStream = is;
-            this.objectOutputStream = os;
+        ;
+        Status status;
+        Object result;
+
+        Response(Status status, Object result) {
+            this.status = status;
+            this.result = result;
+        }
+    }
+
+    private static class RequestHandler implements Runnable {
+
+        private final Socket socket;
+        private final Skeleton<?> skeleton;
+
+        RequestHandler(Socket socket, Skeleton<?> skeleton) {
+            this.socket = socket;
             this.skeleton = skeleton;
         }
 
         @Override
         public void run() {
             try {
-                throw new RMIException("");
-            } catch (RMIException e) {
-                skeleton.service_error(e);
+                ObjectOutputStream outputStream = new ObjectOutputStream(socket.getOutputStream());
+                ObjectInputStream inputStream = new ObjectInputStream(socket.getInputStream());
+                Response response;
+
+                try {
+                    Object obj = inputStream.readObject();
+                    if (!(obj instanceof Skeleton.Request)) {
+                        throw new RMIException("invalid request object");
+                    }
+
+                    Request request = (Request) obj;
+                    Object[] arguments = request.arguments.toArray();
+                    Class[] argumentTypes = new Class[arguments.length];
+                    for (int i = 0; i < arguments.length; i++) {
+                        argumentTypes[i] = arguments[i].getClass();
+                    }
+
+                    Method method = skeleton.klass.getDeclaredMethod(request.methodName, argumentTypes);
+                    try {
+                        Object result = method.invoke(skeleton.object, arguments);
+                        response = new Response(Response.Status.NORMAL, result);
+                    } catch (InvocationTargetException e) {
+                        response = new Response(Response.Status.EXCEPTION, e.getTargetException());
+                    }
+
+                } catch (ClassNotFoundException | RMIException | NoSuchMethodException | IllegalAccessException e) {
+                    RMIException rmiException = new RMIException(e);
+                    response = new Response(Response.Status.ERROR, rmiException);
+                    skeleton.service_error(rmiException);
+                }
+                outputStream.writeObject(response);
+                socket.close();
+            } catch (IOException e) {
+                // We just ignore any IOException since it's unlikely that we can inform the client of this.
+                // In most cases, the client will also get an IOException.
+                e.printStackTrace();
             }
+
         }
 
-        /**
-         * Helper to convert input stream into a String
-         * @param inputStream
-         * @return String
-         */
-        private String readInputStream(InputStream inputStream) {
-            java.util.Scanner s = new java.util.Scanner(inputStream).useDelimiter("\\A");
-            return s.hasNext() ? s.next() : "";
-        }
     }
 
 }
