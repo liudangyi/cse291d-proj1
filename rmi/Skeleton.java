@@ -1,10 +1,17 @@
 package rmi;
 
+import com.sun.istack.internal.NotNull;
+import com.sun.istack.internal.Nullable;
+
 import java.io.*;
+import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.lang.reflect.InvocationTargetException;
 import java.net.*;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -60,11 +67,12 @@ public class Skeleton<T> {
      *                              <code>server</code> is <code>null</code>.
      */
     public Skeleton(Class<T> c, T server) throws Error, NullPointerException {
-        if (c == null || server == null)
+        if (c == null || server == null) {
             throw new NullPointerException();
-
-        if (!c.isInterface())
+        }
+        if (!c.isInterface()) {
             throw new Error();
+        }
 
         for (Method method : c.getMethods()) {
             boolean found = false;
@@ -75,8 +83,9 @@ public class Skeleton<T> {
                     break;
                 }
             }
-            if (!found)
+            if (!found) {
                 throw new Error();
+            }
         }
 
         klass = c;
@@ -194,16 +203,13 @@ public class Skeleton<T> {
                         Socket socket = serverSocket.accept();
                         executor.execute(new RequestHandler(socket, Skeleton.this));
                     } catch (IOException e) {
-                        if (!isRunning) { // we catch the error because stop() is called
-                            stopped(null);
-                            break;
-                        }
-                        if (!listen_error(e)) {
+                        if (isRunning && !listen_error(e)) {
                             stop();
                             stopped(e);
-                            break;
+                            return;
                         }
                     }
+                    stopped(null);
                 }
             }).start();
         } catch (IOException e) {
@@ -223,7 +229,7 @@ public class Skeleton<T> {
      */
     public synchronized void stop() {
         if (!isRunning)
-            return;
+            throw new RuntimeException("Stop a not running skeleton");
 
         try {
             serverSocket.close();
@@ -233,17 +239,26 @@ public class Skeleton<T> {
         }
     }
 
-    private static class Request implements Serializable {
+    static class Request implements Serializable {
         String methodName;
-        ArrayList<Object> arguments;
+        List<Object> arguments;
+        List<Class> argumentTypes;
+
+        Request(String methodName, @NotNull Object[] arguments, @NotNull Class[] argumentTypes) {
+            if (arguments == null) {
+                arguments = new Objects[]{};
+            }
+            this.methodName = methodName;
+            this.arguments = Arrays.asList(arguments);
+            this.argumentTypes = Arrays.asList(argumentTypes);
+        }
     }
 
-    private static class Response implements Serializable {
+    static class Response implements Serializable {
         enum Status {
             NORMAL, EXCEPTION, ERROR
         }
 
-        ;
         Status status;
         Object result;
 
@@ -277,15 +292,12 @@ public class Skeleton<T> {
                     }
 
                     Request request = (Request) obj;
-                    Object[] arguments = request.arguments.toArray();
-                    Class[] argumentTypes = new Class[arguments.length];
-                    for (int i = 0; i < arguments.length; i++) {
-                        argumentTypes[i] = arguments[i].getClass();
-                    }
+                    Object[] args = request.arguments.toArray();
+                    Class[] argTypes = (Class[]) request.argumentTypes.toArray();
 
-                    Method method = skeleton.klass.getDeclaredMethod(request.methodName, argumentTypes);
+                    Method method = skeleton.klass.getMethod(request.methodName, argTypes);
                     try {
-                        Object result = method.invoke(skeleton.object, arguments);
+                        Object result = method.invoke(skeleton.object, args);
                         response = new Response(Response.Status.NORMAL, result);
                     } catch (InvocationTargetException e) {
                         response = new Response(Response.Status.EXCEPTION, e.getTargetException());
@@ -306,6 +318,10 @@ public class Skeleton<T> {
 
         }
 
+    }
+
+    public InetSocketAddress getAddress() {
+        return address;
     }
 
 }
