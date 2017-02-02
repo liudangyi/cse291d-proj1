@@ -62,8 +62,8 @@ public abstract class Stub {
 
         InetSocketAddress address = skeleton.getAddress();
         if (address.getHostName().equals("0.0.0.0")) {
-            String localHostName = InetAddress.getLocalHost().getHostName();
-            address = new InetSocketAddress(localHostName, address.getPort());
+            InetAddress localhost = InetAddress.getLocalHost();
+            address = new InetSocketAddress(localhost, address.getPort());
         }
         return create(c, address);
     }

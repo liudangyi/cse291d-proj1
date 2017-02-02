@@ -1,14 +1,11 @@
 package rmi;
 
 import com.sun.istack.internal.NotNull;
-import com.sun.istack.internal.Nullable;
 
 import java.io.*;
-import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.lang.reflect.InvocationTargetException;
 import java.net.*;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -67,6 +64,29 @@ public class Skeleton<T> {
      *                              <code>server</code> is <code>null</code>.
      */
     public Skeleton(Class<T> c, T server) throws Error, NullPointerException {
+        this(c, server, null);
+    }
+
+    /**
+     * Creates a <code>Skeleton</code> with the given initial server address.
+     * <p>
+     * <p>
+     * This constructor should be used when the port number is significant.
+     *
+     * @param c       An object representing the class of the interface for which the
+     *                skeleton server is to handle method call requests.
+     * @param server  An object implementing said interface. Requests for method
+     *                calls are forwarded by the skeleton to this object.
+     * @param address The address at which the skeleton is to run. If
+     *                <code>null</code>, the address will be chosen by the
+     *                system when <code>start</code> is called.
+     * @throws Error                If <code>c</code> does not represent a remote interface -
+     *                              an interface whose methods are all marked as throwing
+     *                              <code>RMIException</code>.
+     * @throws NullPointerException If either of <code>c</code> or
+     *                              <code>server</code> is <code>null</code>.
+     */
+    public Skeleton(Class<T> c, T server, InetSocketAddress address) {
         if (c == null || server == null) {
             throw new NullPointerException();
         }
@@ -91,30 +111,6 @@ public class Skeleton<T> {
         klass = c;
         object = server;
         isRunning = false;
-    }
-
-    /**
-     * Creates a <code>Skeleton</code> with the given initial server address.
-     * <p>
-     * <p>
-     * This constructor should be used when the port number is significant.
-     *
-     * @param c       An object representing the class of the interface for which the
-     *                skeleton server is to handle method call requests.
-     * @param server  An object implementing said interface. Requests for method
-     *                calls are forwarded by the skeleton to this object.
-     * @param address The address at which the skeleton is to run. If
-     *                <code>null</code>, the address will be chosen by the
-     *                system when <code>start</code> is called.
-     * @throws Error                If <code>c</code> does not represent a remote interface -
-     *                              an interface whose methods are all marked as throwing
-     *                              <code>RMIException</code>.
-     * @throws NullPointerException If either of <code>c</code> or
-     *                              <code>server</code> is <code>null</code>.
-     */
-    public Skeleton(Class<T> c, T server, InetSocketAddress address) {
-        this(c, server);
-
         this.address = address;
     }
 
@@ -193,6 +189,12 @@ public class Skeleton<T> {
             serverSocket = new ServerSocket();
             serverSocket.bind(address);
             isRunning = true;
+
+            // If address is null, we're assigned a random port. We'll save the port
+            // number in address in case we restart (and still use the same port).
+            if (address == null) {
+                address = new InetSocketAddress(serverSocket.getLocalPort());
+            }
 
             new Thread(new Runnable() {
                 @Override
@@ -313,7 +315,7 @@ public class Skeleton<T> {
             } catch (IOException e) {
                 // We just ignore any IOException since it's unlikely that we can inform the client of this.
                 // In most cases, the client will also get an IOException.
-                e.printStackTrace();
+                // e.printStackTrace();
             }
 
         }
@@ -321,6 +323,9 @@ public class Skeleton<T> {
     }
 
     public InetSocketAddress getAddress() {
+        if (address == null)
+            throw new IllegalStateException();
+
         return address;
     }
 
