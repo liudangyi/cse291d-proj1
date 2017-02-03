@@ -49,6 +49,14 @@ test : all-classes
 	@echo
 	java conformance.ConformanceTests
 
+.PHONY : pingpong-client
+pingpong-client : all-classes
+	java test.PingPong.PingPongClient
+
+.PHONY : pingpong-server
+pingpong-server : all-classes
+	java test.PingPong.PingPongServer
+
 # Delete all intermediate and final output and leave only the source.
 .PHONY : clean
 clean :
