@@ -1,7 +1,5 @@
 package rmi;
 
-import com.sun.istack.internal.NotNull;
-
 import java.io.*;
 import java.lang.reflect.Method;
 import java.lang.reflect.InvocationTargetException;
@@ -246,7 +244,7 @@ public class Skeleton<T> {
         List<Object> arguments;
         List<Class> argumentTypes;
 
-        Request(String methodName, @NotNull Object[] arguments, @NotNull Class[] argumentTypes) {
+        Request(String methodName, Object[] arguments, Class[] argumentTypes) {
             if (arguments == null) {
                 arguments = new Objects[]{};
             }

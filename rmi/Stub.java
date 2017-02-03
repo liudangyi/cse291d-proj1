@@ -9,7 +9,6 @@ import java.lang.reflect.Proxy;
 import java.net.*;
 import java.net.UnknownHostException;
 
-import com.sun.istack.internal.Nullable;
 import rmi.Skeleton.*;
 
 /**
@@ -185,7 +184,7 @@ public abstract class Stub {
         }
 
         @Override
-        public Object invoke(Object proxy, Method method, @Nullable Object[] args) throws Throwable {
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
 
             try {
                 Method builtin = BuiltinMethods.class.getMethod(method.getName(), method.getParameterTypes());
