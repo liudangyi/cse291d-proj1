@@ -12,7 +12,10 @@ public class PingPongClient {
 
         for (int i = 0; i < 4; i++) {
             try {
-                pingServer.ping(i);
+                String pong = pingServer.ping(i);
+                if (!pong.equals("Pong" + i)) {
+                    throw new RMIException("Asset false");
+                }
             } catch (RMIException e) {
                 fails += 1;
                 e.printStackTrace();
