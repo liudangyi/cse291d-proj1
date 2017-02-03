@@ -3,6 +3,7 @@ package rmi;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.lang.reflect.*;
 import java.lang.reflect.Proxy;
 import java.net.*;
@@ -61,7 +62,7 @@ public abstract class Stub {
         }
 
         InetSocketAddress address = skeleton.getAddress();
-        if (address.getHostName().equals("0.0.0.0")) {
+        if (address.getAddress().isAnyLocalAddress()) {
             InetAddress localhost = InetAddress.getLocalHost();
             address = new InetSocketAddress(localhost, address.getPort());
         }
@@ -147,23 +148,49 @@ public abstract class Stub {
             }
         }
 
-        StubInvocationHandler handler = new StubInvocationHandler(c, address);
+        StubInvocationHandler<T> handler = new StubInvocationHandler<>(c, address);
 
-        return (T) Proxy.newProxyInstance(c.getClassLoader(), new Class[]{c}, handler);
+        return (T) Proxy.newProxyInstance(c.getClassLoader(), new Class[]{c, Serializable.class}, handler);
     }
 
-    private static class StubInvocationHandler implements InvocationHandler {
+    private static class StubInvocationHandler<T> implements InvocationHandler, Serializable {
 
         private InetSocketAddress address;
-        private Class klass;
+        private Class<T> klass;
 
-        StubInvocationHandler(Class c, InetSocketAddress address) {
+        private class BuiltinMethods {
+            @Override
+            public boolean equals(Object obj) {
+                if (klass.isInstance(obj)) {
+                    T cast = (T) obj;
+                    return this.toString().equals(cast.toString());
+                }
+                return false;
+            }
+
+            @Override
+            public int hashCode() {
+                return toString().hashCode();
+            }
+
+            @Override
+            public String toString() {
+                return klass.getName() + "@" + address.toString();
+            }
+        }
+
+        StubInvocationHandler(Class<T> c, InetSocketAddress address) {
             this.klass = c;
             this.address = address;
         }
 
         @Override
         public Object invoke(Object proxy, Method method, @Nullable Object[] args) throws Throwable {
+
+            try {
+                Method builtin = BuiltinMethods.class.getMethod(method.getName(), method.getParameterTypes());
+                return builtin.invoke(new BuiltinMethods(), args);
+            } catch (NoSuchMethodException ignored) {}
 
             Response response;
 

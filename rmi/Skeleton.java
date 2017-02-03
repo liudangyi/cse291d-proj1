@@ -231,7 +231,7 @@ public class Skeleton<T> {
      */
     public synchronized void stop() {
         if (!isRunning)
-            throw new RuntimeException("Stop a not running skeleton");
+            return;
 
         try {
             serverSocket.close();
@@ -316,6 +316,7 @@ public class Skeleton<T> {
                 // We just ignore any IOException since it's unlikely that we can inform the client of this.
                 // In most cases, the client will also get an IOException.
                 // e.printStackTrace();
+                skeleton.service_error(new RMIException(e));
             }
 
         }
