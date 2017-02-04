@@ -1,13 +1,12 @@
 package test.PingPong;
 
-import rmi.Stub;
-import java.net.InetSocketAddress;
+import rmi.RMIException;
+
+import java.net.UnknownHostException;
 
 /**
- * Created by dangyi on 2/2/17.
+ * Created by dangyi on 2/4/17.
  */
-public class PingServerFactory {
-    static PingServer makePingServer() {
-        return Stub.create(PingServer.class, new InetSocketAddress("server", 30000));
-    }
+public interface PingServerFactory {
+    PingServer makePingServer() throws RMIException, UnknownHostException;
 }
