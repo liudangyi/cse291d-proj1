@@ -1,4 +1,4 @@
-package test.PingPong;
+package pingPong;
 
 import rmi.RMIException;
 import rmi.Skeleton;
